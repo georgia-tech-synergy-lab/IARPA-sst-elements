@@ -70,6 +70,8 @@ libmemHierarchy_la_SOURCES = \
 	memNIC.cc \
 	memNICFour.h \
 	memNICFour.cc \
+	roundRobinArbiter.cc \
+	roundRobinArbiter.h \
 	customcmd/customCmdMemory.h \
 	customcmd/defCustomCmdHandler.cc \
 	customcmd/defCustomCmdHandler.h \

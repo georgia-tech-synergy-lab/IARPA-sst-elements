@@ -132,7 +132,7 @@ typedef enum {IGNORE, DONE, STALL, BLOCK, REJECT} CacheAction;
 
 enum class CoherenceProtocol {MSI, MESI, NONE};
 
-enum class Endpoint { CPU, Cache, Memory, Directory, Scratchpad, MMIO };
+enum class Endpoint { CPU, Cache, Memory, Directory, Scratchpad, MMIO, RoundRobinArbiter };
 
 }}
 #endif	/* UTIL_H */
