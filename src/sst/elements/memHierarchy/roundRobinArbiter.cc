@@ -50,18 +50,27 @@ RoundRobinArbiter::RoundRobinArbiter(ComponentId_t id, Params &params) : Compone
     overrideGroupID        = params.find<uint64_t>("overrideGroupID", 2);
     isCacheConnected = params.find<bool>("isCacheConnected", false);
 
-    port1minAddr= params.find<uint64_t>("port1minAddr", 10);
-    port2minAddr= params.find<uint64_t>("port2minAddr", 1024);
-    port3minAddr= params.find<uint64_t>("port3minAddr", 2048);
-    port1maxAddr= params.find<uint64_t>("port1maxAddr", 1023);
-    port2maxAddr= params.find<uint64_t>("port2maxAddr", 2047);
-    port3maxAddr= params.find<uint64_t>("port3maxAddr", 3071);
+    port1minAddr = params.find<uint64_t>("port1minAddr", 0);
+    port2minAddr = params.find<uint64_t>("port2minAddr", 0);
+    port3minAddr = params.find<uint64_t>("port3minAddr", 0);
+    port1maxAddr = params.find<uint64_t>("port1maxAddr", 0);
+    port2maxAddr = params.find<uint64_t>("port2maxAddr", 0);
+    port3maxAddr = params.find<uint64_t>("port3maxAddr", 0);
 
-    allowedMinAddr= params.find<uint64_t>("allowedMinAddr", 0);
-    allowedMaxAddr= params.find<uint64_t>("allowedMaxAddr", 4095);
+    num_cpus = params.find<uint64_t>("num_cpus", 1);
+    for (int i = 0; i < num_cpus; i++)
+    {
+        std::string tmp = "CPU" + std::to_string(i);
+        cpu_name = params.find<std::string>(tmp, "mirandaCPU_0");
+        allowedMinAddr = params.find<uint64_t>("allowedMinAddr" + std::to_string(i), 0);
+        allowedMaxAddr = params.find<uint64_t>("allowedMaxAddr" + std::to_string(i), 0);
+		allowedMinAddrMap.insert(make_pair(cpu_name, allowedMinAddr));
+		allowedMaxAddrMap.insert(make_pair(cpu_name, allowedMaxAddr));
+        printf("Security map check %s %s %x %x\n", tmp.c_str(), cpu_name.c_str(), allowedMinAddr, allowedMaxAddr);   
+    }
 
-    ilSize   = params.find<std::string>("interleave_size", "0B");
-    ilStep   = params.find<std::string>("interleave_step", "0B");
+    ilSize = params.find<std::string>("interleave_size", "0B");
+    ilStep = params.find<std::string>("interleave_step", "0B");
 
     /* Create clock, deadlock timeout, etc. */
     createClock(params);
@@ -443,20 +452,20 @@ void RoundRobinArbiter::init(unsigned int phase) {
     linkDown_->init(phase);
 
     if (!phase) {
-//        linkUpPort1_->sendUntimedData(this->getInitCoherenceEvent());
-//        linkUpPort2_->sendUntimedData(this->getInitCoherenceEvent());
-//        linkUpPort3_->sendUntimedData(this->getInitCoherenceEvent());
-//        linkDown_->sendUntimedData(this->getInitCoherenceEvent());
+        linkUpPort1_->sendUntimedData(this->getInitCoherenceEvent());
+        linkUpPort2_->sendUntimedData(this->getInitCoherenceEvent());
+        linkUpPort3_->sendUntimedData(this->getInitCoherenceEvent());
+        linkDown_->sendUntimedData(this->getInitCoherenceEvent());
     }
 
     while (MemEventInit * memEvent = linkUpPort1_->recvUntimedData()) {
         init1=1;
         if (memEvent->getCmd() == Command::NULLCMD) {
-//            if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
-//                MemEventInit * mEv = memEvent->clone();
-//                mEv->setSrc(getName());
-//                linkDown_->sendUntimedData(mEv);
-//            }
+            if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
+                MemEventInit * mEv = memEvent->clone();
+                mEv->setSrc(getName());
+                linkDown_->sendUntimedData(mEv);
+            }
         } else {
             MemEventInit * mEv = memEvent->clone();
             mEv->setSrc(getName());
@@ -469,12 +478,12 @@ void RoundRobinArbiter::init(unsigned int phase) {
         init1=0;
         while (MemEventInit * memEvent = linkDown_->recvUntimedData()) {
             if (memEvent && memEvent->getCmd() == Command::NULLCMD) {
-//	            if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
-//	                MemEventInit * mEv = memEvent->clone();
-//	                mEv->setSrc(getName());
-//	                linkUpPort1_->sendUntimedData(mEv);
-//	            }
-			}
+                if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
+                    MemEventInit * mEv = memEvent->clone();
+                    mEv->setSrc(getName());
+                    linkUpPort1_->sendUntimedData(mEv);
+                }
+            }
             delete memEvent;
         }
     }
@@ -482,11 +491,11 @@ void RoundRobinArbiter::init(unsigned int phase) {
     while (MemEventInit * memEvent = linkUpPort2_->recvUntimedData()) {
         init2=1;
         if (memEvent->getCmd() == Command::NULLCMD) {
-//            if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
-//                MemEventInit * mEv = memEvent->clone();
-//                mEv->setSrc(getName());
-//                linkDown_->sendUntimedData(mEv);
-//            }
+            if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
+                MemEventInit * mEv = memEvent->clone();
+                mEv->setSrc(getName());
+                linkDown_->sendUntimedData(mEv);
+            }
         } else {
             MemEventInit * mEv = memEvent->clone();
             mEv->setSrc(getName());
@@ -499,11 +508,11 @@ void RoundRobinArbiter::init(unsigned int phase) {
         init2=0;
         while (MemEventInit * memEvent = linkDown_->recvUntimedData()) {
             if (memEvent && memEvent->getCmd() == Command::NULLCMD){
-//                if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
-//                    MemEventInit * mEv = memEvent->clone();
-//                    mEv->setSrc(getName());
-//                    linkUpPort2_->sendUntimedData(mEv);
-//                }
+                if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
+                    MemEventInit * mEv = memEvent->clone();
+                    mEv->setSrc(getName());
+                    linkUpPort2_->sendUntimedData(mEv);
+                }
             }
             delete memEvent;
         }
@@ -512,11 +521,11 @@ void RoundRobinArbiter::init(unsigned int phase) {
     while (MemEventInit * memEvent = linkUpPort3_->recvUntimedData()) {
         init3=0;
         if (memEvent->getCmd() == Command::NULLCMD) {
-//            if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
-//                MemEventInit * mEv = memEvent->clone();
-//                mEv->setSrc(getName());
-//                linkDown_->sendUntimedData(mEv);
-//            }
+            if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
+                MemEventInit * mEv = memEvent->clone();
+                mEv->setSrc(getName());
+                linkDown_->sendUntimedData(mEv);
+            }
         } else {
             MemEventInit * mEv = memEvent->clone();
             mEv->setSrc(getName());
@@ -529,12 +538,12 @@ void RoundRobinArbiter::init(unsigned int phase) {
         init3=0;
         while (MemEventInit * memEvent = linkDown_->recvUntimedData()) {
             if (memEvent && memEvent->getCmd() == Command::NULLCMD) {
-//	            if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
-//	                MemEventInit * mEv = memEvent->clone();
-//	                mEv->setSrc(getName());
-//	                linkUpPort3_->sendUntimedData(mEv);
-//	            }
-			}
+                if (memEvent->getInitCmd() == MemEventInit::InitCommand::Endpoint) {
+                    MemEventInit * mEv = memEvent->clone();
+                    mEv->setSrc(getName());
+                    linkUpPort3_->sendUntimedData(mEv);
+                }
+            }
             delete memEvent;
         }
     }
@@ -556,24 +565,9 @@ void RoundRobinArbiter::finish() {
 }
 
 
-// TODO: Anshuman: Complete this
 void RoundRobinArbiter::printStatus(Output &out) {
     out.output("MemHierarchy::RoundRobinArbiter %s\n", getName().c_str());
     out.output("  Clock is %s. Last active cycle: %" PRIu64 "\n", clockIsOn_ ? "on" : "off", timestamp_);
-    //out.output("  Events in queues: Retry = %zu, Event = %zu, Prefetch = %zu\n", retryBuffer_.size(), eventBuffer_.size(), prefetchBuffer_.size());
-    //if (mshr_) {
-    //    out.output("  MSHR Status:\n");
-    //    mshr_->printStatus(out);
-    //}
-    //if (linkUp_ && linkUp_ != linkDown_) {
-    //    out.output("  Up link status: ");
-    //    linkUp_->printStatus(out);
-    //    out.output("  Down link status: ");
-    //} else {
-    //    out.output("  Link status: ");
-    //}
-    //if (linkDown_) linkDown_->printStatus(out);
-
     out.output(" CSR Snoop filter \n");
     this->printStatus(out);
     out.output("End MemHierarchy::RoundRobinArbiter\n\n");
@@ -693,7 +687,7 @@ void RoundRobinArbiter::configureLinks(Params &params, TimeConverter* tc) {
     // Configure low link
     linkDown_ = loadAnonymousSubComponent<MemLinkBase>("memHierarchy.MemNIC", "memlink", 0, ComponentInfo::INSERT_STATS | ComponentInfo::SHARE_PORTS, nicParams, tc);
     linkDown_->setRecvHandler(new Event::Handler<RoundRobinArbiter>(this, &RoundRobinArbiter::handleEventDown));
-//    linkDown_->setRegion(regionPort4_);
+    linkDown_->setRegion(regionPort4_);
 
     linkUpPort1_ = loadAnonymousSubComponent<MemLinkBase>("memHierarchy.MemLink", "port1link", 0, ComponentInfo::INSERT_STATS | ComponentInfo::SHARE_PORTS, port1link, tc);
     linkUpPort1_->setRecvHandler(new Event::Handler<RoundRobinArbiter>(this, &RoundRobinArbiter::handleEventUpPort1));
@@ -714,140 +708,91 @@ bool RoundRobinArbiter::sendOutgoingEvents() {
     // Update timestamp
     timestamp_++;
     bool idle = true;
-	
-	if(startTimes_.size() >= 2) asm("ud2");
-	SST::Event::id_type firstEventID = startTimes_.begin()->first;
+    
+//    SST::Event::id_type firstEventID = startTimes_.begin()->first;
 
     while (!(outgoingEventQueueDownPort1_.empty() && outgoingEventQueueDownPort2_.empty() && outgoingEventQueueDownPort3_.empty())){
         if (outgoingEventQueueDownPort1_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueDownPort1_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkDown_->send(outgoingEvent);
-	                outgoingEventQueueDownPort1_.pop_front();
-	                idle = false;
-				}
+             MemEventBase *outgoingEvent = outgoingEventQueueDownPort1_.front().event;
+             linkDown_->send(outgoingEvent);
+             outgoingEventQueueDownPort1_.pop_front();
+             idle = false;
         }
         if (outgoingEventQueueDownPort2_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueDownPort2_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkDown_->send(outgoingEvent);
-	                outgoingEventQueueDownPort2_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueDownPort2_.front().event;
+            linkDown_->send(outgoingEvent);
+            outgoingEventQueueDownPort2_.pop_front();
+            idle = false;
         }
         if (outgoingEventQueueDownPort3_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueDownPort3_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkDown_->send(outgoingEvent);
-	                outgoingEventQueueDownPort3_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueDownPort3_.front().event;
+            linkDown_->send(outgoingEvent);
+            outgoingEventQueueDownPort3_.pop_front();
+            idle = false;
         }
     }
 
     while (!(outgoingEventQueueUpPort1FromOutPort_.empty() && outgoingEventQueueUpPort1FromPort2_.empty() && outgoingEventQueueUpPort1FromPort3_.empty())){
         if (outgoingEventQueueUpPort1FromOutPort_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort1FromOutPort_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort1_->send(outgoingEvent);
-	                outgoingEventQueueUpPort1FromOutPort_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort1FromOutPort_.front().event;
+            linkUpPort1_->send(outgoingEvent);
+            outgoingEventQueueUpPort1FromOutPort_.pop_front();
+            idle = false;
         }
         if (outgoingEventQueueUpPort1FromPort2_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort1FromPort2_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort1_->send(outgoingEvent);
-	                outgoingEventQueueUpPort1FromPort2_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort1FromPort2_.front().event;
+            linkUpPort1_->send(outgoingEvent);
+            outgoingEventQueueUpPort1FromPort2_.pop_front();
+            idle = false;
         }
         if (outgoingEventQueueUpPort1FromPort3_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort1FromPort3_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort1_->send(outgoingEvent);
-	                outgoingEventQueueUpPort1FromPort3_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort1FromPort3_.front().event;
+            linkUpPort1_->send(outgoingEvent);
+            outgoingEventQueueUpPort1FromPort3_.pop_front();
+            idle = false;
         }
     }
 
 
     while (!(outgoingEventQueueUpPort2FromOutPort_.empty() && outgoingEventQueueUpPort2FromPort1_.empty() && outgoingEventQueueUpPort2FromPort3_.empty())){
         if (outgoingEventQueueUpPort2FromOutPort_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort2FromOutPort_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort2_->send(outgoingEvent);
-	                outgoingEventQueueUpPort2FromOutPort_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort2FromOutPort_.front().event;
+            linkUpPort2_->send(outgoingEvent);
+            outgoingEventQueueUpPort2FromOutPort_.pop_front();
+            idle = false;
         }
         if (outgoingEventQueueUpPort2FromPort1_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort2FromPort1_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort2_->send(outgoingEvent);
-	                outgoingEventQueueUpPort2FromPort1_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort2FromPort1_.front().event;
+            linkUpPort2_->send(outgoingEvent);
+            outgoingEventQueueUpPort2FromPort1_.pop_front();
+            idle = false;
         }
         if (outgoingEventQueueUpPort2FromPort3_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort2FromPort3_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort2_->send(outgoingEvent);
-	                outgoingEventQueueUpPort2FromPort3_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort2FromPort3_.front().event;
+            linkUpPort2_->send(outgoingEvent);
+            outgoingEventQueueUpPort2FromPort3_.pop_front();
+            idle = false;
         }
     }
 
     while (!(outgoingEventQueueUpPort3FromOutPort_.empty() && outgoingEventQueueUpPort3FromPort2_.empty() && outgoingEventQueueUpPort3FromPort1_.empty())){
         if (outgoingEventQueueUpPort3FromOutPort_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort3FromOutPort_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort3_->send(outgoingEvent);
-	                outgoingEventQueueUpPort3FromOutPort_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort3FromOutPort_.front().event;
+            linkUpPort3_->send(outgoingEvent);
+            outgoingEventQueueUpPort3FromOutPort_.pop_front();
+            idle = false;
         }
         if (outgoingEventQueueUpPort3FromPort2_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort3FromPort2_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort3_->send(outgoingEvent);
-	                outgoingEventQueueUpPort3FromPort2_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort3FromPort2_.front().event;
+            linkUpPort3_->send(outgoingEvent);
+            outgoingEventQueueUpPort3FromPort2_.pop_front();
+            idle = false;
         }
         if (outgoingEventQueueUpPort3FromPort1_.size() > 0) {
-                MemEventBase *outgoingEvent = outgoingEventQueueUpPort3FromPort1_.front().event;
-				if(outgoingEvent->getID() == firstEventID)
-				{
-					startTimes_.erase(firstEventID);
-	                linkUpPort3_->send(outgoingEvent);
-	                outgoingEventQueueUpPort3FromPort1_.pop_front();
-	                idle = false;
-				}
+            MemEventBase *outgoingEvent = outgoingEventQueueUpPort3FromPort1_.front().event;
+            linkUpPort3_->send(outgoingEvent);
+            outgoingEventQueueUpPort3FromPort1_.pop_front();
+            idle = false;
         }
     }
     return idle && checkIdle();
@@ -871,18 +816,13 @@ bool RoundRobinArbiter::handleCMD(MemEventBase * event, PortNum srcPort) {
 
 
 uint64_t RoundRobinArbiter::forwardMessage(MemEventBase * event, unsigned int requestSize, uint64_t baseTime, PortNum srcPort, vector<uint8_t>* data, Command fwdCmd) {
-//uint64_t RoundRobinArbiter::forwardMessage(MemEvent * event, unsigned int requestSize, uint64_t baseTime, PortNum srcPort, vector<uint8_t>* data, Command fwdCmd) {
 
     MemEvent * eventType = static_cast<MemEvent*>(event);
     if (eventType->isDataRequest()) {
-//        addrDestMap_.insert({std::make_pair(event->getAddr(),event->getID()),event->getSrc()});
         addrDestMap_.insert({std::make_pair(event->getRoutingAddress(),event->getID()),event->getSrc()});
     }
 
     /* Create event to be forwarded */
-//    MemEvent* forwardEvent;
-//    forwardEvent = new MemEvent(*event);
-
     MemEvent* forwardEvent;
     forwardEvent = new MemEvent(*eventType);
     Addr rtaddr = event->getRoutingAddress();
@@ -900,38 +840,39 @@ uint64_t RoundRobinArbiter::forwardMessage(MemEventBase * event, unsigned int re
     if (data != nullptr) forwardEvent->setPayload(*data);
 
     /* Determine latency in cycles */
-    uint64_t deliveryTime;
-//    if (baseTime < timestamp_) baseTime = timestamp_;
-//
-//    if (event->queryFlag(MemEvent::F_NONCACHEABLE)) {
-//        forwardEvent->setFlag(MemEvent::F_NONCACHEABLE);
-//        deliveryTime = timestamp_+1;
-//    } else {
-//        deliveryTime = baseTime+1;
-//    }
-
-//    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
-//         getCurrentSimCycle(), timestamp_, getName().c_str(), forwardEvent->getVerboseString().c_str());
-//    forwardByAddress(forwardEvent, deliveryTime, srcPort);
     forwardByAddress(event, timestamp_, srcPort);
 
-    return deliveryTime;
+    return 1;
 }
+
+void RoundRobinArbiter::securityCheck(std::string rqstr, Addr addr)
+{
+    std::map<std::string, uint64_t>::iterator itMinAddr = allowedMinAddrMap.find(rqstr);
+    std::map<std::string, uint64_t>::iterator itMaxAddr = allowedMaxAddrMap.find(rqstr);
+//    auto itMinAddr = allowedMinAddrMap.find(rqstr);
+//    auto itMaxAddr = allowedMaxAddrMap.find(rqstr);
+   
+    if(itMinAddr != allowedMinAddrMap.end() && itMaxAddr != allowedMaxAddrMap.end())  
+	{
+	    /*** Perform security check here. ***/
+	    if (((uint64_t)addr < itMinAddr->second) || ((uint64_t)addr >= itMaxAddr->second))
+	        out_->fatal(CALL_INFO, -1, "%s, ERROR. Accessing 0x%x address is not allowed.\n", getName().c_str(), addr);
+	}
+
+} 
 
 void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortNum srcPort) {
     event->setSrc(getName());
+//    event->setSrc(event->getRqstr());
 
     std::string dst;
     PortNum destPort = PortNum::OUTPORT;
 
     Addr addr = event->getRoutingAddress();
 
-    /*** Perform security check here. ***/
-//    if ((addr < allowedMinAddr) || (addr >= allowedMaxAddr))
-//        out_->fatal(CALL_INFO, -1, "%s, ERROR. Accessing 0x%x address is not allowed.\n", getName().c_str(), addr);
+    securityCheck(event->getRqstr(), addr);
 
     MemEvent * eventType = static_cast<MemEvent*>(event);
-    Command cmd = event->getCmd();
 
     if (eventType->isDataRequest()) {
         if ((addr >= port1minAddr) && (addr <= port1maxAddr)){
@@ -976,13 +917,6 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
             destPort = it->second;
             addrPortMap_.erase(it);
 
-            // Test omitting AckPut
-//            Command cmd = event->getCmd();
-//            switch (cmd) {
-//                case Command::AckPut:
-//                    return;
-//            }
-
             switch(destPort) {
                 case PortNum::PORT1  : dst = linkUpPort1_->findTargetDestination(event->getRoutingAddress()); break;
                 case PortNum::PORT2  : dst = linkUpPort2_->findTargetDestination(event->getRoutingAddress()); break;
@@ -1002,19 +936,6 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
                     out_->fatal(CALL_INFO, -1, "%s, ERROR. Destination not found.\n", getName().c_str());break;
             }
         } else {
-//    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
-//         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
-            // Test omitting FetchXResp
-            Command cmd = event->getCmd();
-            switch (cmd) {
-                case Command::FetchXResp:
-                case Command::FetchResp:
-//				default:
-                    event->setDst("dirctrl0");
-        			Response fwdReq = {event, ts, packetHeaderBytes + event->getPayloadSize()};
-        			addToOutgoingQueueUp(fwdReq, PortNum::OUTPORT, PortNum::PORT1);
-                    return;
-            }
             out_->fatal(CALL_INFO, -1, "%s, ERROR. Address not found.\n", getName().c_str());
         }
 
@@ -1030,36 +951,12 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
         else addToOutgoingQueueDown(fwdReq, srcPort, destPort);
     }
     else {
-//    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
-//         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
-
-			dst = linkDown_->findTargetDestination(event->getRoutingAddress());
-			if(dst == "")
-				dst ="node_os.cache";
-			//dst ="node0.cpu0.l2cache";
-            event->setDst(dst);
-			event->setSrc(getName());
-            destPort = PortNum::OUTPORT;
-            Response fwdReq = {event, ts, packetHeaderBytes + event->getPayloadSize()};
-            addToOutgoingQueueDown(fwdReq, srcPort, destPort);
-//        }
-
-//        if (eventType->isWriteback())
-//            printf("Writeback 0x%x\n",addr);
-//        else if (eventType->isRoutedByAddress())
-//            printf("RoutedByAddress 0x%x\n",addr);
-//        else if (eventType->isPrefetch())
-//            printf("Prefetch 0x%x\n",addr);
-//        else
-//            printf("Unknown Event type 0x%x\n",addr);
-
-        // TODO: Need to figure out what to do for these packets.
-        //out_->fatal(CALL_INFO, -1, "%s, ERROR. Event is neither a Request, nor a Response.\n", getName().c_str());
+//	    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
+//	         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
+//        out_->fatal(CALL_INFO, -1, "%s, ERROR. Event is neither a Request, nor a Response.\n", getName().c_str());
     }
-
-//    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
-//         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
-
+    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
+         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
 }
 
 
@@ -1068,13 +965,11 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
 
     switch(destPort) {
         case PortNum::PORT1 :
-				//Directly send
-//                linkUpPort1_->send(resp.event);
         switch(srcPort) {
                 case PortNum::PORT2 :
                     for (rit = outgoingEventQueueUpPort1FromPort2_.rbegin(); rit != outgoingEventQueueUpPort1FromPort2_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort1FromPort2_.insert(rit.base(), resp);
     
@@ -1088,8 +983,8 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     break;
                 case PortNum::PORT3 :
                     for (rit = outgoingEventQueueUpPort1FromPort3_.rbegin(); rit != outgoingEventQueueUpPort1FromPort3_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort1FromPort3_.insert(rit.base(), resp);
     
@@ -1103,8 +998,8 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     break;
                 case PortNum::OUTPORT :
                     for (rit = outgoingEventQueueUpPort1FromOutPort_.rbegin(); rit != outgoingEventQueueUpPort1FromOutPort_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort1FromOutPort_.insert(rit.base(), resp);
     
@@ -1122,13 +1017,11 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
             break;
 
         case PortNum::PORT2 :
-				//Directly send
-//                linkUpPort2_->send(resp.event);
         switch(srcPort) {
                 case PortNum::PORT1 :
                     for (rit = outgoingEventQueueUpPort2FromPort1_.rbegin(); rit != outgoingEventQueueUpPort2FromPort1_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort2FromPort1_.insert(rit.base(), resp);
     
@@ -1142,8 +1035,8 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     break;
                 case PortNum::PORT3 :
                     for (rit = outgoingEventQueueUpPort2FromPort3_.rbegin(); rit != outgoingEventQueueUpPort2FromPort3_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort2FromPort3_.insert(rit.base(), resp);
     
@@ -1157,8 +1050,8 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     break;
                 case PortNum::OUTPORT :
                     for (rit = outgoingEventQueueUpPort2FromOutPort_.rbegin(); rit != outgoingEventQueueUpPort2FromOutPort_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort2FromOutPort_.insert(rit.base(), resp);
     
@@ -1176,13 +1069,11 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
             break;
 
         case PortNum::PORT3 :
-				//Directly send
-//                linkUpPort3_->send(resp.event);
         switch(srcPort) {
                 case PortNum::PORT2 :
                     for (rit = outgoingEventQueueUpPort3FromPort2_.rbegin(); rit != outgoingEventQueueUpPort3FromPort2_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort3FromPort2_.insert(rit.base(), resp);
     
@@ -1196,8 +1087,8 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     break;
                 case PortNum::PORT1 :
                     for (rit = outgoingEventQueueUpPort3FromPort1_.rbegin(); rit != outgoingEventQueueUpPort3FromPort1_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort3FromPort1_.insert(rit.base(), resp);
     
@@ -1211,8 +1102,8 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     break;
                 case PortNum::OUTPORT :
                     for (rit = outgoingEventQueueUpPort3FromOutPort_.rbegin(); rit != outgoingEventQueueUpPort3FromOutPort_.rend(); rit++) {
-//                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+                        if (resp.deliveryTime >= (*rit).deliveryTime) break;
+                        if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
                     }
                     outgoingEventQueueUpPort3FromOutPort_.insert(rit.base(), resp);
     
@@ -1240,8 +1131,8 @@ void RoundRobinArbiter::addToOutgoingQueueDown(Response& resp, PortNum srcPort, 
 
     if (srcPort == PortNum::PORT1) {
         for (rit = outgoingEventQueueDownPort1_.rbegin(); rit != outgoingEventQueueDownPort1_.rend(); rit++) {
-//            if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//            if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+            if (resp.deliveryTime >= (*rit).deliveryTime) break;
+            if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
         }
         outgoingEventQueueDownPort1_.insert(rit.base(), resp);
 
@@ -1255,8 +1146,8 @@ void RoundRobinArbiter::addToOutgoingQueueDown(Response& resp, PortNum srcPort, 
         }
     } else if (srcPort == PortNum::PORT2) {
         for (rit = outgoingEventQueueDownPort2_.rbegin(); rit != outgoingEventQueueDownPort2_.rend(); rit++) {
-//            if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//            if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+            if (resp.deliveryTime >= (*rit).deliveryTime) break;
+            if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
         }
         outgoingEventQueueDownPort2_.insert(rit.base(), resp);
 
@@ -1269,8 +1160,8 @@ void RoundRobinArbiter::addToOutgoingQueueDown(Response& resp, PortNum srcPort, 
         }
     } else if (srcPort == PortNum::PORT3) {
         for (rit = outgoingEventQueueDownPort3_.rbegin(); rit != outgoingEventQueueDownPort3_.rend(); rit++) {
-//            if (resp.deliveryTime >= (*rit).deliveryTime) break;
-//            if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
+            if (resp.deliveryTime >= (*rit).deliveryTime) break;
+            if (resp.event->getRoutingAddress() == (*rit).event->getRoutingAddress()) break;
         }
         outgoingEventQueueDownPort3_.insert(rit.base(), resp);
 
@@ -1296,30 +1187,6 @@ void RoundRobinArbiter::registerStatistics() {
 
     stat_RecvEvents  = registerStatistic<uint64_t>("TotalEventsReceived");
     stat_RetryEvents = registerStatistic<uint64_t>("TotalEventsReplayed");
-
-    //statSFUncacheRecv[(int)Command::Put]      = registerStatistic<uint64_t>("Put_uncache_recv");
-    //statSFUncacheRecv[(int)Command::Get]      = registerStatistic<uint64_t>("Get_uncache_recv");
-    //statSFUncacheRecv[(int)Command::AckMove]  = registerStatistic<uint64_t>("AckMove_uncache_recv");
-    //statSFUncacheRecv[(int)Command::GetS]     = registerStatistic<uint64_t>("GetS_uncache_recv");
-    //statSFUncacheRecv[(int)Command::Write]    = registerStatistic<uint64_t>("Write_uncache_recv");
-    //statSFUncacheRecv[(int)Command::GetSX]    = registerStatistic<uint64_t>("GetSX_uncache_recv");
-    //statSFUncacheRecv[(int)Command::GetSResp] = registerStatistic<uint64_t>("GetSResp_uncache_recv");
-    //statSFUncacheRecv[(int)Command::WriteResp]  = registerStatistic<uint64_t>("WriteResp_uncache_recv");
-    //statSFUncacheRecv[(int)Command::CustomReq]  = registerStatistic<uint64_t>("CustomReq_uncache_recv");
-    //statSFUncacheRecv[(int)Command::CustomResp] = registerStatistic<uint64_t>("CustomResp_uncache_recv");
-    //statSFUncacheRecv[(int)Command::CustomAck]  = registerStatistic<uint64_t>("CustomAck_uncache_recv");
-
-    //// Valid cache commands depend on coherence manager
-    //std::set<Command> validrecv = coherenceMgr_->getValidReceiveEvents();
-
-    //for (std::set<Command>::iterator it = validrecv.begin(); it != validrecv.end(); it++) {
-    //    std::string stat = CommandString[(int)(*it)];
-    //    stat.append("_recv");
-    //    statSFCacheRecv[(int)(*it)] = registerStatistic<uint64_t>(stat);
-    //}
-
-    //statMSHROccupancy               = registerStatistic<uint64_t>("MSHR_occupancy");
-    //statBankConflicts               = registerStatistic<uint64_t>("Bank_conflicts");
 }
 
 
@@ -1330,7 +1197,6 @@ void RoundRobinArbiter::registerStatistics() {
 MemEventInitCoherence * RoundRobinArbiter::getInitCoherenceEvent() {
     if (isCacheConnected)
         return new MemEventInitCoherence(getName(), Endpoint::Directory, false /* inclusive */, true /* sends WBAck */, false /* expects WBAck */, lineSize_, true /* tracks block presence */);
-//        return new MemEventInitCoherence(getName(), Endpoint::Directory, true /* inclusive */, false /* sends WBAck */, true /* expects WBAck */, lineSize_, true /* tracks block presence */);
     else
         return new MemEventInitCoherence(getName(), Endpoint::Directory, true /* inclusive */, false /* sends WBAck */, false /* expects WBAck */, lineSize_, false /* tracks block presence */);
 }

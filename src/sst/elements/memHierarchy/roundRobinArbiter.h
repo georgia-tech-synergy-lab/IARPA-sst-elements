@@ -191,6 +191,135 @@ public:
         uint64_t size;          // Size of event (for bandwidth accounting)
     };
 
+    /** Internal struct to keep track of directory requests to main memory */
+    struct DirEntry {
+        static const        MemEvent::id_type NO_LAST_REQUEST;
+
+	uint32_t            waitingAcks;    // Number of acks we are waiting for
+	bool                cached;         // whether block is cached or not
+        Addr                baseAddr;       // block address
+        State               state;          // state
+        MemEvent::id_type   lastRequest;    // ID of message we're wanting a response to  - used to track whether a NACK needs to be retried
+        std::list<DirEntry*>::iterator cacheIter;
+	std::vector<bool>   sharers;        // set of sharers for block
+        int                 owner;          // owner of block
+        Output * dbg;
+
+        DirEntry(Addr bsAddr, uint32_t bitlength, Output * d){
+            clearEntry();
+            baseAddr     = bsAddr;
+            sharers.resize(bitlength);
+            dbg          = d;
+            state        = I;
+            cached       = false;
+        }
+
+        void clearEntry(){
+            setToSteadyState();
+            waitingAcks  = 0;
+            cached       = true;
+            baseAddr     = 0;
+            clearSharers();
+            owner        = -1;
+        }
+
+        std::string getString() {
+            std::ostringstream str;
+            str << "State: " << StateString[state];
+            str << " Sharers: [";
+            bool first = true;
+            for (int i = 0; i < sharers.size(); i++) {
+                if (sharers[i]) {
+                    if (!first) str << ",";
+                    str << i;
+                    first = false;
+                }
+            }
+            str << "] Owner: " << owner;
+            str << " Cached: " << (cached ? "y" : "n");
+            str << " Acks: " << waitingAcks;
+            return str.str();
+        }
+
+        bool isCached() {
+            return cached;
+        }
+
+        void setCached(bool cache) {
+            cached = cache;
+        }
+
+        Addr getBaseAddr() {
+            return baseAddr;
+        }
+
+        void setToSteadyState(){
+            lastRequest = DirEntry::NO_LAST_REQUEST;
+        }
+
+        uint32_t getSharerCount(void) {
+            uint32_t count = 0;
+            for (uint32_t i = 0; i < sharers.size(); i++) {
+                if (sharers[i]) count++;
+            }
+            return count;
+        }
+
+        void clearSharers(void){
+            for (uint32_t i = 0; i < sharers.size(); i++)
+                sharers[i] = false;
+        }
+
+        void addSharer(int id){
+            sharers[id]= true;
+        }
+
+        bool isSharer(int id) {
+            return sharers[id];
+        }
+
+        void removeSharer(int id){
+            if (!sharers[id]) {
+                dbg->fatal(CALL_INFO,-1,"Removing a sharer which does not exist\n");
+            }
+            sharers[id]= false;
+        }
+
+        int getOwner(void) {
+            return owner;
+        }
+
+        void setOwner(int id) {
+            owner = id;
+        }
+
+        void clearOwner() {
+            owner = -1;
+        }
+
+        void incrementWaitingAcks() {
+            waitingAcks++;
+        }
+
+        void decrementWaitingAcks() {
+            waitingAcks--;
+        }
+
+        uint32_t getWaitingAcks() {
+            return waitingAcks;
+        }
+
+        void setState(State nState) {
+            state = nState;
+        }
+
+        State getState() {
+            return state;
+        }
+    };
+
+
+
 private:
     /** RoundRobinArbiter factory methods **************************************************/
 
@@ -256,9 +385,13 @@ private:
     uint64_t		port2maxAddr;
     uint64_t		port3maxAddr;
 
-    /** Address spaces allowed to access the 3 uplink ports **********************************/
+    /** temproal variable allowed to access the 3 uplink ports **********************************/
+    uint64_t        num_cpus;
+    std::string     cpu_name;
     uint64_t		allowedMinAddr;
     uint64_t		allowedMaxAddr;
+    std::map<std::string, uint64_t> allowedMinAddrMap;
+    std::map<std::string, uint64_t> allowedMaxAddrMap;
 
     /** Memory interleaving size **********************************/
     string ilSize;
@@ -307,6 +440,8 @@ private:
 
     /* Add a new event to the outgoing command queue towards the CPU */
     virtual void addToOutgoingQueueUp(Response& resp, PortNum srcPort, PortNum destPort);
+
+    void securityCheck(std::string rqstr, Addr addr);
 
 protected:
 
