@@ -42,6 +42,8 @@ DirectoryController::DirectoryController(ComponentId_t id, Params &params) :
     cacheLineSize = params.find<uint32_t>("cache_line_size", 64);
     lineSize = cacheLineSize;
 
+    arbiter_name = params.find<std::string>("arbiter_name", "");
+
     dbg.init("", debugLevel, 0, (Output::output_location_t)params.find<int>("debug", 0));
 
     // Detect deprecated parameters and warn/fatal
@@ -331,6 +333,11 @@ DirectoryController::~DirectoryController(){
 
 void DirectoryController::handlePacket(SST::Event *event){
     MemEventBase *evb = static_cast<MemEventBase*>(event);
+
+    if (evb->getMisc() != "") {
+        evb->setSrc(evb->getMisc());
+    }
+
     evb->setDeliveryTime(getCurrentSimTimeNano());
     if (!clockOn) {
         turnClockOn();
@@ -2358,7 +2365,9 @@ void DirectoryController::issueFlush(MemEvent* event) {
 void DirectoryController::issueFetch(MemEvent* event, DirEntry* entry, Command cmd) {
     Addr addr = event->getBaseAddr();
     MemEvent * fetch = new MemEvent(getName(), event->getAddr(), addr, cmd, lineSize);
-    fetch->setDst(entry->getOwner());
+//    fetch->setDst(entry->getOwner());
+    fetch->setMisc(entry->getOwner());
+    fetch->setDst(arbiter_name);
 
     if (responses.find(addr) == responses.end()) {
         std::map<std::string,MemEvent::id_type> resp;
@@ -2390,7 +2399,14 @@ void DirectoryController::issueInvalidation(std::string dst, MemEvent* event, Di
     } else {
         inv->setRqstr(getName());
     }
-    inv->setDst(dst);
+    if (arbiter_name != "")
+    {
+        inv->setMisc(dst);
+        inv->setDst(arbiter_name);
+    }
+    else{
+        inv->setDst(dst);
+    }
 
     mshr->incrementAcksNeeded(addr);
 
@@ -2408,6 +2424,12 @@ void DirectoryController::issueInvalidation(std::string dst, MemEvent* event, Di
 
 void DirectoryController::sendDataResponse(MemEvent* event, DirEntry* entry, std::vector<uint8_t>& data, Command cmd, uint32_t flags) {
     MemEvent * respEv = event->makeResponse(cmd);
+    if (arbiter_name != "")
+    {
+        respEv->setMisc(respEv->getDst()); // sender before ARB
+        respEv->setDst(arbiter_name);
+    }
+
     respEv->setSize(lineSize);
     respEv->setPayload(data);
     respEv->setMemFlags(flags);
@@ -2561,6 +2583,10 @@ void DirectoryController::forwardByDestination(MemEventBase* ev, Cycle_t ts, boo
         cpuMsgQueue.insert(std::make_pair(ts, ev));
     } else if (memLink->isReachable(ev->getDst())) {
         memMsgQueue.insert(std::make_pair(ts, MemMsg(ev, dirAccess)));
+    } else if (arbiter_name != "") {
+        ev->setMisc(ev->getDst());
+        ev->setDst(arbiter_name);
+        cpuMsgQueue.insert(std::make_pair(ts, ev));
     } else {
         out.fatal(CALL_INFO, -1, "%s, Error: Destination %s appears unreachable on both links. Event: %s\n",
                 getName().c_str(), ev->getDst().c_str(), ev->getVerboseString(dlevel).c_str());

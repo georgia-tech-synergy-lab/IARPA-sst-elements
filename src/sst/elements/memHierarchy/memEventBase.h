@@ -113,6 +113,10 @@ public:
     /** Sets the requestor string - whose original request caused this MemEvent */
     void setRqstr(const std::string& rqstr) { rqstr_ = rqstr; }
 
+    const std::string& getMisc(void) const { return misc_; }
+    /** Sets the requestor string - whose original request caused this MemEvent */
+    void setMisc(const std::string& misc) { misc_ = misc; }
+
     /** @return the thread ID that originated the original request */
     const uint32_t getThreadId(void) const { return tid_; }
     /** Sets the thread ID that originated the original request */
@@ -218,6 +222,7 @@ protected:
     Command         cmd_;               // Command
     uint32_t        flags_;
     uint32_t        memFlags_;
+    string          misc_;             // Misc Information 
 
     MemEventBase() {} // For serialization only
 
@@ -233,6 +238,7 @@ public:
         ser & cmd_;
         ser & flags_;
         ser & memFlags_;
+        ser & misc_;
     }
 
     ImplementSerializable(SST::MemHierarchy::MemEventBase);

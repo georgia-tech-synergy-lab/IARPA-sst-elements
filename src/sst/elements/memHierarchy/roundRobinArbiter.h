@@ -181,6 +181,7 @@ public:
     typedef std::pair<uint64_t, int> id_type;
     std::map<std::pair<Addr,id_type>, PortNum>     addrPortMap_;
     std::map<std::pair<Addr,id_type>, std::string> addrDestMap_; // Used to figure out the destination of a response event
+    std::map<id_type, std::string> idDestMap_; // Used to figure out the destination of a response event for invaldation
 
     virtual void recordIncomingRequest(MemEventBase* event);
 

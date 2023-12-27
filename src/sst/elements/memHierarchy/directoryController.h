@@ -152,6 +152,7 @@ private:
     std::set<Addr> DEBUG_ADDR;
 
     uint32_t    cacheLineSize;
+    std::string arbiter_name;
 
     /* Range of addresses supported by this directory */
     MemRegion   region; 

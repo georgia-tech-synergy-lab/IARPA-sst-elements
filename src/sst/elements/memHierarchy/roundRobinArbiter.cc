@@ -61,11 +61,11 @@ RoundRobinArbiter::RoundRobinArbiter(ComponentId_t id, Params &params) : Compone
     for (int i = 0; i < num_cpus; i++)
     {
         std::string tmp = "CPU" + std::to_string(i);
-        cpu_name = params.find<std::string>(tmp, "mirandaCPU_0");
+        cpu_name = params.find<std::string>(tmp, "");
         allowedMinAddr = params.find<uint64_t>("allowedMinAddr" + std::to_string(i), 0);
         allowedMaxAddr = params.find<uint64_t>("allowedMaxAddr" + std::to_string(i), 0);
-		allowedMinAddrMap.insert(make_pair(cpu_name, allowedMinAddr));
-		allowedMaxAddrMap.insert(make_pair(cpu_name, allowedMaxAddr));
+		allowedMinAddrMap.insert(std::make_pair(cpu_name, allowedMinAddr));
+		allowedMaxAddrMap.insert(std::make_pair(cpu_name, allowedMaxAddr));
         printf("Security map check %s %s %x %x\n", tmp.c_str(), cpu_name.c_str(), allowedMinAddr, allowedMaxAddr);   
     }
 
@@ -849,22 +849,18 @@ void RoundRobinArbiter::securityCheck(std::string rqstr, Addr addr)
 {
     std::map<std::string, uint64_t>::iterator itMinAddr = allowedMinAddrMap.find(rqstr);
     std::map<std::string, uint64_t>::iterator itMaxAddr = allowedMaxAddrMap.find(rqstr);
-//    auto itMinAddr = allowedMinAddrMap.find(rqstr);
-//    auto itMaxAddr = allowedMaxAddrMap.find(rqstr);
    
     if(itMinAddr != allowedMinAddrMap.end() && itMaxAddr != allowedMaxAddrMap.end())  
 	{
 	    /*** Perform security check here. ***/
 	    if (((uint64_t)addr < itMinAddr->second) || ((uint64_t)addr >= itMaxAddr->second))
 	        out_->fatal(CALL_INFO, -1, "%s, ERROR. Accessing 0x%x address is not allowed.\n", getName().c_str(), addr);
+//	        printf("%s, ERROR. Accessing 0x%x address is not allowed.\n", getName().c_str(), addr);
 	}
 
 } 
 
 void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortNum srcPort) {
-    event->setSrc(getName());
-//    event->setSrc(event->getRqstr());
-
     std::string dst;
     PortNum destPort = PortNum::OUTPORT;
 
@@ -875,6 +871,9 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
     MemEvent * eventType = static_cast<MemEvent*>(event);
 
     if (eventType->isDataRequest()) {
+        event->setMisc(event->getSrc());
+        event->setSrc(getName());
+
         if ((addr >= port1minAddr) && (addr <= port1maxAddr)){
             dst = linkUpPort1_->findTargetDestination(event->getRoutingAddress());
             destPort = PortNum::PORT1;
@@ -907,6 +906,9 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
         }
     }
     else if (eventType->isResponse()) {
+        event->setMisc(event->getSrc());
+        event->setSrc(getName());
+
         int i;
         std::map<std::pair<Addr,id_type>,PortNum>::iterator it;
         it = addrPortMap_.find(std::make_pair(addr,event->getResponseToID()));
@@ -936,7 +938,18 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
                     out_->fatal(CALL_INFO, -1, "%s, ERROR. Destination not found.\n", getName().c_str());break;
             }
         } else {
-            out_->fatal(CALL_INFO, -1, "%s, ERROR. Address not found.\n", getName().c_str());
+            // Response for Invalidation
+            std::map<id_type,std::string>::iterator it_inv;
+            it_inv = idDestMap_.find(event->getResponseToID());
+        	if (it_inv != idDestMap_.end())
+			{
+//	            dst = "dirctrl0";
+	            dst = it_inv->second;
+    	        event->setSrc(getName());
+            	destPort = PortNum::PORT1;
+			} else {
+                out_->fatal(CALL_INFO, -1, "%s, ERROR. Address not found.\n", getName().c_str());
+            }
         }
 
         if (dst != "") event->setDst(dst);
@@ -951,12 +964,16 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
         else addToOutgoingQueueDown(fwdReq, srcPort, destPort);
     }
     else {
-//	    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
-//	         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
-//        out_->fatal(CALL_INFO, -1, "%s, ERROR. Event is neither a Request, nor a Response.\n", getName().c_str());
+        // Invalidation from directory controller. 
+        idDestMap_.insert(std::make_pair(event->getID(), event->getSrc()));
+        event->setSrc(getName());
+        event->setDst(event->getMisc());
+        destPort = PortNum::OUTPORT;
+        Response fwdReq = {event, ts, packetHeaderBytes + event->getPayloadSize()};
+        addToOutgoingQueueDown(fwdReq, srcPort, destPort);
     }
-    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
-         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
+//    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
+//         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
 }
 
 
