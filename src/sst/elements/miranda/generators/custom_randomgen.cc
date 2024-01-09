@@ -76,17 +76,15 @@ CustomRandomGenerator::~CustomRandomGenerator() {
 void CustomRandomGenerator::generate(MirandaRequestQueue<GeneratorRequest*>* q) {
 	out->verbose(CALL_INFO, 4, 0, "Generating next request number: %" PRIu64 "\n", issueCount);
 
-	uint64_t addr;
 	uint64_t rand_addr;
 
 	do {
-	    rand_addr = rng->generateNextUInt64() % (maxAddr * 1024); // Generating address in the KB granularity
-	    addr = rand_addr * 1024;
+	    rand_addr = rng->generateNextUInt64() % (maxAddr * 1024 * 1024); // Generating address in the KB granularity
 	} while (
-		(rand_addr >= addrRangeMinVal * 1024) && (rand_addr < addrRangeMaxVal * 1024) ||
-		(rand_addr >= addrRangeMinVal1 * 1024) && (rand_addr < addrRangeMaxVal1 * 1024) ||
-		(rand_addr >= addrRangeMinVal2 * 1024) && (rand_addr < addrRangeMaxVal2 * 1024) ||
-		(rand_addr >= addrRangeMinVal3 * 1024) && (rand_addr < addrRangeMaxVal3 * 1024)
+		(rand_addr >= addrRangeMinVal) && (rand_addr < addrRangeMaxVal) ||
+		(rand_addr >= addrRangeMinVal1) && (rand_addr < addrRangeMaxVal1) ||
+		(rand_addr >= addrRangeMinVal2) && (rand_addr < addrRangeMaxVal2) ||
+		(rand_addr >= addrRangeMinVal3) && (rand_addr < addrRangeMaxVal3)
 		);
 
 	const double op_decide = rng->nextUniform();
@@ -96,11 +94,10 @@ void CustomRandomGenerator::generate(MirandaRequestQueue<GeneratorRequest*>* q) 
 	out->verbose(CALL_INFO, 4, 0, "Generating next request number: %" PRIu64 "\n", issueCount);
 	out->verbose(CALL_INFO, 4, 0, "CustomRandomGenerator::maxAddr: %" PRIu64 "\n", maxAddr);
 	out->verbose(CALL_INFO, 4, 0, "CustomRandomGenerator::rand_addr: %" PRIu64 "\n", rand_addr);
-	out->verbose(CALL_INFO, 4, 0, "CustomRandomGenerator::addr: %" PRIu64 "\n", addr);
 	out->verbose(CALL_INFO, 4, 0, "CustomRandomGenerator::op_decide: %f\n", op_decide);
 
-    MemoryOpRequest* readAddr = new MemoryOpRequest(addr, reqLength, READ);
-    MemoryOpRequest* writeAddr = new MemoryOpRequest(addr, reqLength, WRITE);
+    MemoryOpRequest* readAddr = new MemoryOpRequest(rand_addr, reqLength, READ);
+    MemoryOpRequest* writeAddr = new MemoryOpRequest(rand_addr, reqLength, WRITE);
 
 	if(option == 1) // READ only
 	{
@@ -123,7 +120,7 @@ void CustomRandomGenerator::generate(MirandaRequestQueue<GeneratorRequest*>* q) 
 	}
 	else if(option == 5) // Randomly mixed 
 	{
-		q->push_back(new MemoryOpRequest(addr, reqLength, ((op_decide*100 < writePercentage) ? READ : WRITE)));
+		q->push_back(new MemoryOpRequest(rand_addr, reqLength, ((op_decide*100 < writePercentage) ? READ : WRITE)));
 	}
 
 	if (issueOpFences) {
