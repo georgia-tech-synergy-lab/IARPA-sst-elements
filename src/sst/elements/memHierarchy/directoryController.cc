@@ -334,7 +334,7 @@ DirectoryController::~DirectoryController(){
 void DirectoryController::handlePacket(SST::Event *event){
     MemEventBase *evb = static_cast<MemEventBase*>(event);
 
-    if (evb->getMisc() != "") {
+    if (evb->getMisc() != "" && arbiter_name != "") {
         evb->setSrc(evb->getMisc());
     }
 
@@ -2365,9 +2365,12 @@ void DirectoryController::issueFlush(MemEvent* event) {
 void DirectoryController::issueFetch(MemEvent* event, DirEntry* entry, Command cmd) {
     Addr addr = event->getBaseAddr();
     MemEvent * fetch = new MemEvent(getName(), event->getAddr(), addr, cmd, lineSize);
-//    fetch->setDst(entry->getOwner());
-    fetch->setMisc(entry->getOwner());
-    fetch->setDst(arbiter_name);
+    if (arbiter_name != ""){
+        fetch->setMisc(entry->getOwner());
+        fetch->setDst(arbiter_name);
+	} else {
+        fetch->setDst(entry->getOwner());
+    }
 
     if (responses.find(addr) == responses.end()) {
         std::map<std::string,MemEvent::id_type> resp;
@@ -2399,12 +2402,11 @@ void DirectoryController::issueInvalidation(std::string dst, MemEvent* event, Di
     } else {
         inv->setRqstr(getName());
     }
-    if (arbiter_name != "")
-    {
+
+    if (arbiter_name != "") {
         inv->setMisc(dst);
         inv->setDst(arbiter_name);
-    }
-    else{
+    } else {
         inv->setDst(dst);
     }
 
@@ -2424,12 +2426,10 @@ void DirectoryController::issueInvalidation(std::string dst, MemEvent* event, Di
 
 void DirectoryController::sendDataResponse(MemEvent* event, DirEntry* entry, std::vector<uint8_t>& data, Command cmd, uint32_t flags) {
     MemEvent * respEv = event->makeResponse(cmd);
-    if (arbiter_name != "")
-    {
+    if (arbiter_name != "") {
         respEv->setMisc(respEv->getDst()); // sender before ARB
         respEv->setDst(arbiter_name);
     }
-
     respEv->setSize(lineSize);
     respEv->setPayload(data);
     respEv->setMemFlags(flags);

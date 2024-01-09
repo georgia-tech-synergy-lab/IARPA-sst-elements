@@ -391,6 +391,7 @@ private:
     std::string     cpu_name;
     uint64_t		allowedMinAddr;
     uint64_t		allowedMaxAddr;
+    std::vector<std::string> cpu_names;
     std::map<std::string, uint64_t> allowedMinAddrMap;
     std::map<std::string, uint64_t> allowedMaxAddrMap;
 

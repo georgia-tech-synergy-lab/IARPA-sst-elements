@@ -57,13 +57,16 @@ RoundRobinArbiter::RoundRobinArbiter(ComponentId_t id, Params &params) : Compone
     port2maxAddr = params.find<uint64_t>("port2maxAddr", 0);
     port3maxAddr = params.find<uint64_t>("port3maxAddr", 0);
 
-    num_cpus = params.find<uint64_t>("num_cpus", 1);
+    num_cpus = params.find<uint64_t>("num_cpus", 0);
     for (int i = 0; i < num_cpus; i++)
     {
         std::string tmp = "CPU" + std::to_string(i);
         cpu_name = params.find<std::string>(tmp, "");
         allowedMinAddr = params.find<uint64_t>("allowedMinAddr" + std::to_string(i), 0);
         allowedMaxAddr = params.find<uint64_t>("allowedMaxAddr" + std::to_string(i), 0);
+
+        // Insert information for security check
+        cpu_names.push_back(cpu_name);
 		allowedMinAddrMap.insert(std::make_pair(cpu_name, allowedMinAddr));
 		allowedMaxAddrMap.insert(std::make_pair(cpu_name, allowedMaxAddr));
         printf("Security map check %s %s %x %x\n", tmp.c_str(), cpu_name.c_str(), allowedMinAddr, allowedMaxAddr);   
@@ -847,17 +850,22 @@ uint64_t RoundRobinArbiter::forwardMessage(MemEventBase * event, unsigned int re
 
 void RoundRobinArbiter::securityCheck(std::string rqstr, Addr addr)
 {
-    std::map<std::string, uint64_t>::iterator itMinAddr = allowedMinAddrMap.find(rqstr);
-    std::map<std::string, uint64_t>::iterator itMaxAddr = allowedMaxAddrMap.find(rqstr);
-   
-    if(itMinAddr != allowedMinAddrMap.end() && itMaxAddr != allowedMaxAddrMap.end())  
-	{
-	    /*** Perform security check here. ***/
-	    if (((uint64_t)addr < itMinAddr->second) || ((uint64_t)addr >= itMaxAddr->second))
-	        out_->fatal(CALL_INFO, -1, "%s, ERROR. Accessing 0x%x address is not allowed.\n", getName().c_str(), addr);
-//	        printf("%s, ERROR. Accessing 0x%x address is not allowed.\n", getName().c_str(), addr);
-	}
-
+    for (int i = 0; i < cpu_names.size(); i++)
+    {
+        if (rqstr.find(cpu_names[i]) != std::string::npos)
+        {
+            std::map<std::string, uint64_t>::iterator itMinAddr = allowedMinAddrMap.find(cpu_names[i]);
+            std::map<std::string, uint64_t>::iterator itMaxAddr = allowedMaxAddrMap.find(cpu_names[i]);
+           
+            if(itMinAddr != allowedMinAddrMap.end() && itMaxAddr != allowedMaxAddrMap.end())  
+        	{
+        	    /*** Perform security check here. ***/
+        	    if (((uint64_t)addr < itMinAddr->second) || ((uint64_t)addr >= itMaxAddr->second))
+        	        out_->fatal(CALL_INFO, -1, "%s, ERROR. CPU %s Accessing 0x%x address is not allowed.\n", getName().c_str(), cpu_names[i].c_str(), addr);
+        	}
+            break;
+        }
+    }
 } 
 
 void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortNum srcPort) {
@@ -943,7 +951,6 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
             it_inv = idDestMap_.find(event->getResponseToID());
         	if (it_inv != idDestMap_.end())
 			{
-//	            dst = "dirctrl0";
 	            dst = it_inv->second;
     	        event->setSrc(getName());
             	destPort = PortNum::PORT1;
@@ -952,10 +959,9 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
             }
         }
 
-        if (dst != "") event->setDst(dst);
-
-        if (dst == "")
-        {
+        if (dst != "") { 
+            event->setDst(dst);
+        } else {
             out_->fatal(CALL_INFO, -1, "%s, ERROR. Destination not found.\n", getName().c_str());
         }
 
@@ -972,8 +978,8 @@ void RoundRobinArbiter::forwardByAddress(MemEventBase * event, Cycle_t ts, PortN
         Response fwdReq = {event, ts, packetHeaderBytes + event->getPayloadSize()};
         addToOutgoingQueueDown(fwdReq, srcPort, destPort);
     }
-//    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
-//         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
+    printf("E: %-20" PRIu64 " %-20" PRIu64 " %-20s Event:New     (%s)\n",
+         getCurrentSimCycle(), timestamp_, getName().c_str(), event->getVerboseString().c_str());
 }
 
 
@@ -982,7 +988,7 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
 
     switch(destPort) {
         case PortNum::PORT1 :
-        switch(srcPort) {
+            switch(srcPort) {
                 case PortNum::PORT2 :
                     for (rit = outgoingEventQueueUpPort1FromPort2_.rbegin(); rit != outgoingEventQueueUpPort1FromPort2_.rend(); rit++) {
                         if (resp.deliveryTime >= (*rit).deliveryTime) break;
@@ -1029,12 +1035,12 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     }
                     break;
                 default:
-            out_->fatal(CALL_INFO, -1, "%s, ERROR. Invalid Port.\n", getName().c_str());break;
-        }
+                    out_->fatal(CALL_INFO, -1, "%s, ERROR. Invalid Port.\n", getName().c_str()); break;
+            }
             break;
 
         case PortNum::PORT2 :
-        switch(srcPort) {
+            switch(srcPort) {
                 case PortNum::PORT1 :
                     for (rit = outgoingEventQueueUpPort2FromPort1_.rbegin(); rit != outgoingEventQueueUpPort2FromPort1_.rend(); rit++) {
                         if (resp.deliveryTime >= (*rit).deliveryTime) break;
@@ -1081,12 +1087,12 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     }
                     break;
                 default:
-            out_->fatal(CALL_INFO, -1, "%s, ERROR. Invalid Port.\n", getName().c_str());break;
-        }
+                    out_->fatal(CALL_INFO, -1, "%s, ERROR. Invalid Port.\n", getName().c_str()); break;
+            }
             break;
 
         case PortNum::PORT3 :
-        switch(srcPort) {
+            switch(srcPort) {
                 case PortNum::PORT2 :
                     for (rit = outgoingEventQueueUpPort3FromPort2_.rbegin(); rit != outgoingEventQueueUpPort3FromPort2_.rend(); rit++) {
                         if (resp.deliveryTime >= (*rit).deliveryTime) break;
@@ -1133,7 +1139,7 @@ void RoundRobinArbiter::addToOutgoingQueueUp(Response& resp, PortNum srcPort, Po
                     }
                     break;
                 default:
-            out_->fatal(CALL_INFO, -1, "%s, ERROR. Invalid Port.\n", getName().c_str());break;
+                    out_->fatal(CALL_INFO, -1, "%s, ERROR. Invalid Port.\n", getName().c_str()); break;
         }
             break;
 
